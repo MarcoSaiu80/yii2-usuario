@@ -110,6 +110,10 @@ class SettingsController extends Controller
                             'disconnect',
                             'delete',
                             'two-factor',
+                            'two-factor-email',
+                            'two-factor-send-sms',
+                            'two-factor-enable-from-sms',
+                            'two-factor-sms',
                             'two-factor-enable',
                             'two-factor-disable'
                         ],
@@ -412,6 +416,76 @@ class SettingsController extends Controller
         return $this->renderAjax('two-factor', ['id' => $id, 'uri' => $uri]);
     }
 
+    public function actionTwoFactorSms($id) {
+        /** @var User $user */
+        $user = $this->userQuery->whereId($id)->one();
+
+        if (null === $user) {
+            throw new NotFoundHttpException();
+        }
+
+//        $uri = $this->make(TwoFactorQrCodeUriGeneratorService::class, [$user])->run();
+
+        return $this->renderAjax('two-factor-sms', ['id' => $id]);
+    }
+
+    public function actionTwoFactorEmail($id){
+        //cose
+        return $this->renderAjax('two-factor-email', ['id' => $id]);
+    }
+
+    /**
+     * @param $id
+     */
+    public function actionTwoFactorSendSms($id) {
+        //invio dell'sms
+        //salva il codice inserito
+        Yii::$app->response->format = Response::FORMAT_JSON;
+
+        /** @var User $user */
+        $user = $this->userQuery->whereId($id)->one();
+//        $string = Yii::$app->security->generateRandomString(16);
+        $mng = new Manager();
+        $string = $mng->generateSecretKey();
+        $success = $user && $user->updateAttributes(['auth_tf_key' => $string]);
+        //invio dell'sms
+        return [
+            'success' => $success,
+            'message' => $success
+                ? Yii::t('usuario', 'Sms Sent (code:'.$string.')')
+                : Yii::t('usuario', 'Fail sending the sms')
+        ];
+
+
+    }
+
+    public function actionTwoFactorEnableFromSms($id){
+        /** @var User $user */
+        $user = $this->userQuery->whereId($id)->one();
+        if (null === $user) {
+            return [
+                'success' => false,
+                'message' => Yii::t('usuario', 'User not found.')
+            ];
+        }
+        $code = Yii::$app->request->get('code');
+
+        $success = $this
+            ->make(TwoFactorCodeValidatorSms::class, [$user, $code, $this->module->twoFactorAuthenticationCycles])
+            ->validate();
+
+        $success = $success && $user->updateAttributes(['auth_tf_enabled' => TwoFactorCodeValidatorSms::class]);
+        Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+        return [
+            'success' => $success,
+            'message' => $success
+                ? Yii::t('usuario', 'Two factor authentication successfully enabled.')
+                : Yii::t('usuario', 'Verification failed. Please, enter new code.')
+        ];
+
+
+
+    }
     public function actionTwoFactorEnable($id)
     {
         Yii::$app->response->format = Response::FORMAT_JSON;

@@ -102,6 +102,15 @@ $module = Yii::$app->getModule('user');
                     <p>
                         <?= Yii::t('usuario', 'Two factor authentication protects you in case of stolen credentials') ?>.
                     </p>
+                    <?php if(!$model->getUser()->auth_tf_enabled):?>
+                    <?php foreach (Yii::$app->params['twoFactorAuthenticationValidators'] as $singleValidator):  ?>
+                        <p>
+                            <?php $toUri = Url::to([$singleValidator['configurationUrl'], 'id' => $model->getUser()->id]); ?>
+                            <?php $toValidator = Url::to([$singleValidator['class'], 'id' => $model->getUser()->id]); ?>
+                            <?=  Html::radio('validator', null,['value'=>$singleValidator['name'],'label'=>$singleValidator['name'],'data-configurationurl'=>$toUri]) ?>
+                        </p>
+                    <?php endforeach; ?>
+                    <?php endif ?>
                     <div class="text-right">
                         <?= Html::a(
                             Yii::t('usuario', 'Disable two factor authentication'),
@@ -160,12 +169,20 @@ $module = Yii::$app->getModule('user');
     // This script should be in fact in a module as an external file
     // consider overriding this view and include your very own approach
     $uri = Url::to(['two-factor', 'id' => $model->getUser()->id]);
+    $uriSms = Url::to(['two-factor-sms', 'id' => $model->getUser()->id]);
+    $uriEmail = Url::to(['two-factor-email', 'id' => $model->getUser()->id]);
+    $sendSms = Url::to(['two-factor-send-sms', 'id' => $model->getUser()->id]);
     $verify = Url::to(['two-factor-enable', 'id' => $model->getUser()->id]);
+    $verifySms = Url::to(['two-factor-enable-from-sms', 'id' => $model->getUser()->id]);
+    $verifyEmail = Url::to(['two-factor-enable', 'id' => $model->getUser()->id]);
     $js = <<<JS
 $('#tfmodal')
     .on('show.bs.modal', function(){
         if(!$('img#qrCode').length) {
-            $(this).find('.modal-body').load('{$uri}');
+            let uri;
+            uri = $("input[name*='validator']:checked").data('configurationurl');
+            //console.log(uri);
+            $(this).find('.modal-body').load(uri);
         } else {
             $('input#tfcode').val('');
         }
@@ -189,6 +206,37 @@ $(document)
           }
        }).fail(function(){ btn.prop('disabled', false); });
     });
+
+/**
+    * invio sms per verifica codice mandato via sms
+*/
+$(document).on('click','.btn-submit-send-sms',function (e){
+    // qua verifico che il numero esista ed in tal caso mando l'sms
+    e.preventDefault();
+    $.getJSON('{$sendSms}',{},function (data){
+           if(data.success){
+               console.log(data)
+               // $('#enable_tf_btn, #disable_tf_btn').toggleClass('hide');
+               $('#tfmessage').removeClass('alert-danger').addClass('alert-success').find('p').text(data.message);
+               // setTimeout(function() { $('#tfmodal').modal('hide'); }, 5000);
+           }
+           else {
+
+           }
+    });
+});
+
+/**
+* verifica del codice inserito via sms
+*/
+$(document).on('click','.btn-submit-code-sms',function (e){
+        e.preventDefault();
+        $.getJSON('{$verifySms}',{code: $('#tfcode').val()},function (data){
+            console.log(data);
+
+        });
+});
+
 JS;
 
     $this->registerJs($js);
